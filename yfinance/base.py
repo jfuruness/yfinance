@@ -43,6 +43,7 @@ from . import shared
 
 class TickerBase():
     def __init__(self, ticker):
+
         self.ticker = ticker.upper()
         self._history = None
         self._base_url = 'https://query1.finance.yahoo.com'
@@ -110,7 +111,6 @@ class TickerBase():
                     Optional. If passed as False, will suppress
                     error message printing to console.
         """
-
         if start or period is None or period.lower() == "max":
             if start is None:
                 start = -2208988800
@@ -264,7 +264,7 @@ class TickerBase():
 
             df.index = utils.camel2title(df.index)
             return df
-
+#        print("I start here")
         # setup proxy in requests format
         if proxy is not None:
             if isinstance(proxy, dict) and "https" in proxy:
@@ -277,37 +277,44 @@ class TickerBase():
         # get info and sustainability
         url = '%s/%s' % (self._scrape_url, self.ticker)
         data = utils.get_json(url, proxy)
-
         # holders
         url = "{}/{}/holders".format(self._scrape_url, self.ticker)
-        holders = _pd.read_html(url)
-        self._major_holders = holders[0]
         try:
-            self._institutional_holders = holders[1]
-        except IndexError:
-            self._institutional_holders = []
-        if 'Date Reported' in self._institutional_holders:
-            self._institutional_holders['Date Reported'] = _pd.to_datetime(
-                self._institutional_holders['Date Reported'])
-        if '% Out' in self._institutional_holders:
-            self._institutional_holders['% Out'] = self._institutional_holders[
-                '% Out'].str.replace('%', '').astype(float)/100
+            holders = _pd.read_html(url)
+            self._major_holders = holders[0]
+            try:
+                self._institutional_holders = holders[1]
+            except IndexError:
+                self._institutional_holders = []
+            if 'Date Reported' in self._institutional_holders:
+                self._institutional_holders['Date Reported'] = _pd.to_datetime(
+                    self._institutional_holders['Date Reported'])
+            if '% Out' in self._institutional_holders:
+                self._institutional_holders['% Out'] = self._institutional_holders[
+                    '% Out'].str.replace('%', '').astype(float)/100
+        except ValueError as e:
+            print(url)
+            print(e)
+            pass
 
         # sustainability
-        d = {}
-        if isinstance(data.get('esgScores'), dict):
-            for item in data['esgScores']:
-                if not isinstance(data['esgScores'][item], (dict, list)):
-                    d[item] = data['esgScores'][item]
-
-            s = _pd.DataFrame(index=[0], data=d)[-1:].T
-            s.columns = ['Value']
-            s.index.name = '%.f-%.f' % (
-                s[s.index == 'ratingYear']['Value'].values[0],
-                s[s.index == 'ratingMonth']['Value'].values[0])
-
-            self._sustainability = s[~s.index.isin(
-                ['maxAge', 'ratingYear', 'ratingMonth'])]
+        try:
+            d = {}
+            if isinstance(data.get('esgScores'), dict):
+                for item in data['esgScores']:
+                    if not isinstance(data['esgScores'][item], (dict, list)):
+                        d[item] = data['esgScores'][item]
+    
+                s = _pd.DataFrame(index=[0], data=d)[-1:].T
+                s.columns = ['Value']
+                s.index.name = '%.f-%.f' % (
+                    s[s.index == 'ratingYear']['Value'].values[0],
+                    s[s.index == 'ratingMonth']['Value'].values[0])
+    
+                self._sustainability = s[~s.index.isin(
+                    ['maxAge', 'ratingYear', 'ratingMonth'])]
+        except IndexError:
+            print("Sustainability error")
 
         # info (be nice to python 2)
         self._info = {}
